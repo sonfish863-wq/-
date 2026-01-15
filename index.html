@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Slime Clicker</title>
+
+<style>
+body {
+  margin: 0;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+  background: url("bg.jpg") no-repeat center center fixed;
+  background-size: cover;
+}
+
+#game {
+  background: rgba(0,0,0,0.5);
+  min-height: 100vh;
+  padding-top: 20px;
+}
+
+#monster {
+  margin: 20px auto;
+  width: 260px;
+  cursor: pointer;
+  position: relative;
+}
+
+#monster img {
+  width: 100%;
+  transition: transform 0.1s, filter 0.1s;
+}
+
+.hit {
+  transform: scale(0.9) rotate(-3deg);
+  filter: brightness(1.5);
+}
+
+.damage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translateX(-50%);
+  font-size: 22px;
+  font-weight: bold;
+  color: #ffeb3b;
+  pointer-events: none;
+  animation: floatUp 0.8s ease-out forwards;
+  text-shadow: 2px 2px 4px black;
+}
+
+@keyframes floatUp {
+  from { opacity: 1; top: 50%; }
+  to { opacity: 0; top: 10%; }
+}
+
+.box {
+  border: 2px solid white;
+  background: rgba(0,0,0,0.6);
+  margin: 10px auto;
+  width: 320px;
+  padding: 10px;
+  border-radius: 12px;
+}
+
+button {
+  padding: 10px;
+  margin: 5px;
+  font-size: 16px;
+  border-radius: 8px;
+  border: none;
+}
+</style>
+</head>
+
+<body>
+<div id="game">
+
+<h2>스테이지: <span id="stage">1</span></h2>
+<h3>레벨: <span id="level">1</span> (EXP: <span id="exp">0</span>/<span id="needExp">10</span>)</h3>
+<h3>골드: <span id="gold">0</span></h3>
+<h3>공격력: <span id="damage">1</span></h3>
+
+<div id="monster" onclick="attack()">
+  <img id="monsterImg" src="slime.png">
+  <p>HP: <span id="monsterHp"></span> / <span id="monsterMaxHp"></span></p>
+</div>
+
+<div class="box">
+  <button onclick="upgradeDamage()">⚔️ 공격력 강화 (<span id="dmgCost"></span>)</button><br>
+  <button onclick="hireHero()">👥 영웅 고용 (<span id="heroCost"></span>)</button>
+  <p>영웅 수: <span id="heroes">0</span></p>
+</div>
+
+<div class="box">
+  <button onclick="resetGame()">🗑️ 처음부터</button>
+</div>
+
+</div>
+
+<script>
+/* ===== 기본 데이터 ===== */
+let stage = 1;
+let gold = 0;
+let damage = 1;
+let monsterMaxHp = 10;
+let monsterHp = monsterMaxHp;
+let damageCost = 10;
+let heroCost = 50;
+let heroes = 0;
+
+/* 레벨 시스템 */
+let level = 1;
+let exp = 0;
+let needExp = 10;
+
+/* 🔔 띠링 소리 */
+function playDing() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.value = 1200;
+  gain.gain.value = 0.2;
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.15);
+}
+
+/* ===== 저장 ===== */
+function saveGame() {
+  localStorage.setItem("slimeSave", JSON.stringify({
+    stage, gold, damage, monsterMaxHp, monsterHp,
+    damageCost, heroCost, heroes, level, exp, needExp
+  }));
+}
+
+function loadGame() {
+  const data = localStorage.getItem("slimeSave");
+  if (data) {
+    const d = JSON.parse(data);
+    stage=d.stage; gold=d.gold; damage=d.damage;
+    monsterMaxHp=d.monsterMaxHp; monsterHp=d.monsterHp;
+    damageCost=d.damageCost; heroCost=d.heroCost; heroes=d.heroes;
+    level=d.level; exp=d.exp; needExp=d.needExp;
+  }
+}
+
+/* ===== UI ===== */
+function updateUI() {
+  stageEl.textContent = stage;
+  goldEl.textContent = Math.floor(gold);
+  damageEl.textContent = damage;
+  monsterHpEl.textContent = Math.floor(monsterHp);
+  monsterMaxHpEl.textContent = monsterMaxHp;
+  dmgCostEl.textContent = damageCost;
+  heroCostEl.textContent = heroCost;
+  heroesEl.textContent = heroes;
+  levelEl.textContent = level;
+  expEl.textContent = exp;
+  needExpEl.textContent = needExp;
+}
+
+/* ===== 데미지 숫자 ===== */
+function showDamage(dmg) {
+  const d = document.createElement("div");
+  d.className = "damage";
+  d.textContent = "-" + dmg;
+  monster.appendChild(d);
+  setTimeout(()=>d.remove(),800);
+}
+
+/* ===== 게임 로직 ===== */
+function attack() {
+  monsterHp -= damage;
+  showDamage(damage);
+  hitEffect();
+  if (monsterHp <= 0) killMonster();
+  updateUI();
+  saveGame();
+}
+
+function hitEffect() {
+  monsterImg.classList.add("hit");
+  setTimeout(()=>monsterImg.classList.remove("hit"),100);
+}
+
+function gainExp(amount){
+  exp += amount;
+  if(exp >= needExp){
+    exp -= needExp;
+    level++;
+    needExp = Math.floor(needExp * 1.5);
+    damage++; // 레벨업 보상
+  }
+}
+
+function killMonster() {
+  gold += monsterMaxHp;
+  gainExp(5);
+  stage++;
+  playDing();
+  monsterMaxHp = Math.floor(monsterMaxHp * 1.3 + 5);
+  monsterHp = monsterMaxHp;
+}
+
+function upgradeDamage() {
+  if (gold >= damageCost) {
+    gold -= damageCost;
+    damage++;
+    damageCost = Math.floor(damageCost * 1.5);
+    updateUI();
+    saveGame();
+  }
+}
+
+function hireHero() {
+  if (gold >= heroCost) {
+    gold -= heroCost;
+    heroes++;
+    heroCost = Math.floor(heroCost * 1.6);
+    updateUI();
+    saveGame();
+  }
+}
+
+/* 자동 공격 */
+setInterval(() => {
+  if (heroes > 0) {
+    monsterHp -= heroes;
+    showDamage(heroes);
+    if (monsterHp <= 0) killMonster();
+    updateUI();
+    saveGame();
+  }
+}, 1000);
+
+/* 처음부터 */
+function resetGame() {
+  if (confirm("진짜 처음부터 할래?")) {
+    localStorage.removeItem("slimeSave");
+    location.reload();
+  }
+}
+
+/* ===== 시작 ===== */
+const stageEl = document.getElementById("stage");
+const goldEl = document.getElementById("gold");
+const damageEl = document.getElementById("damage");
+const monsterHpEl = document.getElementById("monsterHp");
+const monsterMaxHpEl = document.getElementById("monsterMaxHp");
+const dmgCostEl = document.getElementById("dmgCost");
+const heroCostEl = document.getElementById("heroCost");
+const heroesEl = document.getElementById("heroes");
+const monsterImg = document.getElementById("monsterImg");
+const monster = document.getElementById("monster");
+const levelEl = document.getElementById("level");
+const expEl = document.getElementById("exp");
+const needExpEl = document.getElementById("needExp");
+
+loadGame();
+updateUI();
+</script>
+
+</body>
+</html>
